@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  uv-index-app:
+    container_name: uv-index-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_METEOMATICS_USERNAME=${NEXT_PUBLIC_METEOMATICS_USERNAME}
+        - NEXT_PUBLIC_METEOMATICS_PASSWORD=${NEXT_PUBLIC_METEOMATICS_PASSWORD}
+    environment:
+      - NEXT_PUBLIC_METEOMATICS_USERNAME=${NEXT_PUBLIC_METEOMATICS_USERNAME}
+      - NEXT_PUBLIC_METEOMATICS_PASSWORD=${NEXT_PUBLIC_METEOMATICS_PASSWORD}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
