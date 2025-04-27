@@ -20,8 +20,8 @@ export interface LocationData {
 }
 
 // API credentials from environment variables
-const USERNAME = process.env.NEXT_PUBLIC_METEOMATICS_USERNAME || '';
-const PASSWORD = process.env.NEXT_PUBLIC_METEOMATICS_PASSWORD || '';
+const USERNAME = process.env.NEXT_PUBLIC_METEOMATICS_USERNAME || "";
+const PASSWORD = process.env.NEXT_PUBLIC_METEOMATICS_PASSWORD || "";
 const BASE_URL = "https://api.meteomatics.com";
 
 /**
@@ -33,7 +33,9 @@ export async function getMeteomaticsUVIndex(
   try {
     // Check if credentials are available
     if (!USERNAME || !PASSWORD) {
-      console.error('Meteomatics credentials not found in environment variables');
+      console.error(
+        "Meteomatics credentials not found in environment variables"
+      );
       return null;
     }
 
