@@ -34,6 +34,7 @@ This application uses the [Meteomatics API](https://www.meteomatics.com) for pro
 ### Local Development
 
 1. Install dependencies:
+
    ```bash
    npm install
    # or
@@ -43,6 +44,7 @@ This application uses the [Meteomatics API](https://www.meteomatics.com) for pro
 2. Set up your `.env.local` file with your Meteomatics credentials as shown above
 
 3. Run the development server:
+
    ```bash
    npm run dev
    # or
@@ -58,6 +60,7 @@ This application uses the [Meteomatics API](https://www.meteomatics.com) for pro
 1. Make sure you have the `.env.local` file with your credentials in the project root
 
 2. Build and start the container:
+
    ```bash
    docker-compose up -d
    ```
@@ -67,11 +70,13 @@ This application uses the [Meteomatics API](https://www.meteomatics.com) for pro
 #### Using Docker Directly
 
 1. Build the Docker image:
+
    ```bash
    docker build --build-arg NEXT_PUBLIC_METEOMATICS_USERNAME=your_username_here --build-arg NEXT_PUBLIC_METEOMATICS_PASSWORD=your_password_here -t uv-index-app .
    ```
 
 2. Run the container:
+
    ```bash
    docker run -p 3000:3000 -e NEXT_PUBLIC_METEOMATICS_USERNAME=your_username_here -e NEXT_PUBLIC_METEOMATICS_PASSWORD=your_password_here uv-index-app
    ```
