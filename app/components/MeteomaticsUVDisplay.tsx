@@ -21,39 +21,79 @@ export default function MeteomaticsUVDisplay() {
   const [uvData, setUvData] = useState<MeteomaticsUVData | null>(null);
   const [location, setLocation] = useState<LocationData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedHourIndex, setSelectedHourIndex] = useState<number | null>(
     null
   );
+  const [usingFallbackLocation, setUsingFallbackLocation] = useState(false);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
+  const fetchData = async (isRefresh = false) => {
+    try {
+      if (!isRefresh) {
         setLoading(true);
-        setError(null);
-
-        // Get user's location
-        const userLocation = await getUserLocation();
-        setLocation(userLocation);
-
-        // Fetch data from Meteomatics API
-        const data = await getMeteomaticsUVIndex(userLocation);
-        if (!data) {
-          throw new Error("Unable to fetch UV index data from Meteomatics");
-        }
-
-        setUvData(data);
-        setLoading(false);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "An unknown error occurred"
-        );
-        setLoading(false);
+      } else {
+        setRefreshing(true);
       }
-    }
+      setError(null);
+      setUsingFallbackLocation(false);
 
+      // Track if we're using fallback location by checking location coordinates
+      const defaultLocation = { lat: 59.3293, lng: 18.0686 }; // Stockholm coordinates
+
+      // Get user's location first - this is now cached
+      const userLocation = await getUserLocation();
+
+      // Check if we got the fallback location (Stockholm)
+      if (
+        Math.abs(userLocation.lat - defaultLocation.lat) < 0.01 &&
+        Math.abs(userLocation.lng - defaultLocation.lng) < 0.01
+      ) {
+        setUsingFallbackLocation(true);
+      }
+
+      setLocation(userLocation);
+
+      // Fetch data from Meteomatics API - also now cached
+      const data = await getMeteomaticsUVIndex(userLocation);
+      if (!data) {
+        throw new Error("Unable to fetch UV index data from Meteomatics");
+      }
+
+      setUvData(data);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "An unknown error occurred"
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Initial data fetch
+  useEffect(() => {
     fetchData();
   }, []);
+
+  // Function to manually refresh data
+  const handleRefresh = () => {
+    fetchData(true);
+  };
+
+  // Format time for display
+  const formatTime = (timeString: string) => {
+    return new Date(timeString).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  // Get selected hour data
+  const selectedHourData =
+    selectedHourIndex !== null && uvData?.hourlyForecast
+      ? uvData.hourlyForecast[selectedHourIndex]
+      : null;
 
   if (loading) {
     return (
@@ -69,6 +109,12 @@ export default function MeteomaticsUVDisplay() {
       <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
         <h2 className="text-xl font-bold text-red-700">Error</h2>
         <p className="text-red-600 mt-2">{error}</p>
+        <button
+          onClick={handleRefresh}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+        >
+          Try Again
+        </button>
       </div>
     );
   }
@@ -80,29 +126,70 @@ export default function MeteomaticsUVDisplay() {
         <p className="text-yellow-600 mt-2">
           Unable to retrieve UV index information from Meteomatics at this time.
         </p>
+        <button
+          onClick={handleRefresh}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+        >
+          Try Again
+        </button>
       </div>
     );
   }
 
   const { level, color } = getUVSeverity(uvData.uvIndex);
 
-  // Format time for display
-  const formatTime = (timeString: string) => {
-    return new Date(timeString).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  // Get selected hour data
-  const selectedHourData =
-    selectedHourIndex !== null && uvData.hourlyForecast
-      ? uvData.hourlyForecast[selectedHourIndex]
-      : null;
-
   return (
     <div className="w-full max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl">
-      <div className="p-8 w-full">
+      <div className="p-8 w-full relative">
+        {/* Fallback location warning */}
+        {usingFallbackLocation && (
+          <div className="mb-4 p-2 bg-yellow-50 text-yellow-800 text-sm rounded-md border border-yellow-200">
+            <p className="flex items-center">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 mr-1"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              Using default location (Stockholm). Please enable location
+              services in your browser.
+            </p>
+          </div>
+        )}
+
+        {/* Refresh button and loading indicator */}
+        <div className="absolute top-4 right-4 flex items-center">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="text-gray-500 hover:text-gray-700 focus:outline-none"
+            aria-label="Refresh data"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          </button>
+        </div>
+
         <div className="flex justify-between items-center">
           <div className="uppercase tracking-wide text-sm text-indigo-500 font-semibold">
             Current UV Index
