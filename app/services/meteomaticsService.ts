@@ -24,6 +24,17 @@ const USERNAME = process.env.NEXT_PUBLIC_METEOMATICS_USERNAME || "";
 const PASSWORD = process.env.NEXT_PUBLIC_METEOMATICS_PASSWORD || "";
 const BASE_URL = "https://api.meteomatics.com";
 
+// Cache duration in milliseconds (5 minutes)
+const CACHE_DURATION = 5 * 60 * 1000;
+
+// Cache storage
+interface CacheItem {
+  data: MeteomaticsUVData;
+  timestamp: number;
+}
+let uvDataCache: CacheItem | null = null;
+let locationCache: LocationData | null = null;
+
 /**
  * Get UV Index data from the Meteomatics API
  */
@@ -31,6 +42,17 @@ export async function getMeteomaticsUVIndex(
   location: LocationData
 ): Promise<MeteomaticsUVData | null> {
   try {
+    // Check cache first
+    if (
+      uvDataCache &&
+      Date.now() - uvDataCache.timestamp < CACHE_DURATION &&
+      locationCache?.lat === location.lat &&
+      locationCache?.lng === location.lng
+    ) {
+      console.log("Using cached UV data");
+      return uvDataCache.data;
+    }
+
     // Check if credentials are available
     if (!USERNAME || !PASSWORD) {
       console.error(
@@ -61,11 +83,17 @@ export async function getMeteomaticsUVIndex(
     const headers = new Headers();
     headers.set("Authorization", "Basic " + btoa(`${USERNAME}:${PASSWORD}`));
 
-    // Fetch current UV index
-    const currentResponse = await fetch(currentUvUrl, {
-      headers,
-      cache: "no-store",
-    });
+    // Fetch both current and forecast data in parallel
+    const [currentResponse, forecastResponse] = await Promise.all([
+      fetch(currentUvUrl, {
+        headers,
+        cache: "default", // Use browser's standard caching
+      }),
+      fetch(forecastUrl, {
+        headers,
+        cache: "default", // Use browser's standard caching
+      }),
+    ]);
 
     if (!currentResponse.ok) {
       throw new Error(`Error fetching UV index: ${currentResponse.status}`);
@@ -73,17 +101,12 @@ export async function getMeteomaticsUVIndex(
 
     const currentData = await currentResponse.json();
 
-    // Fetch forecast data
-    const forecastResponse = await fetch(forecastUrl, {
-      headers,
-      cache: "no-store",
-    });
-
-    let forecastData;
     let hourlyForecast;
+    let maxUvIndex;
+    let maxUvTime;
 
     if (forecastResponse.ok) {
-      forecastData = await forecastResponse.json();
+      const forecastData = await forecastResponse.json();
 
       // Process forecast data if available
       if (
@@ -107,8 +130,8 @@ export async function getMeteomaticsUVIndex(
             prev.uvIndex > current.uvIndex ? prev : current
           );
 
-          const maxUvIndex = maxUvItem.uvIndex;
-          const maxUvTime = maxUvItem.time;
+          maxUvIndex = maxUvItem.uvIndex;
+          maxUvTime = maxUvItem.time;
         }
       }
     }
@@ -130,20 +153,7 @@ export async function getMeteomaticsUVIndex(
       timestamp = currentData.data[0].coordinates[0].dates[0].date;
     }
 
-    // Find max UV value and its time from the hourly forecast
-    let maxUvIndex;
-    let maxUvTime;
-
-    if (hourlyForecast && hourlyForecast.length > 0) {
-      const maxUvEntry = hourlyForecast.reduce((prev, current) =>
-        prev.uvIndex > current.uvIndex ? prev : current
-      );
-
-      maxUvIndex = maxUvEntry.uvIndex;
-      maxUvTime = maxUvEntry.time;
-    }
-
-    return {
+    const result = {
       uvIndex: currentUvIndex,
       timestamp: timestamp,
       maxUvIndex: maxUvIndex,
@@ -151,30 +161,102 @@ export async function getMeteomaticsUVIndex(
       hourlyForecast: hourlyForecast,
       source: "Meteomatics Professional Weather Data",
     };
+
+    // Update the cache
+    uvDataCache = {
+      data: result,
+      timestamp: Date.now(),
+    };
+    locationCache = location;
+
+    return result;
   } catch (error) {
     console.error("Failed to fetch Meteomatics UV index data:", error);
     return null;
   }
 }
 
+// Cached geolocation data
+let cachedLocation: LocationData | null = null;
+let locationPromise: Promise<LocationData> | null = null;
+
+// Default location - Stockholm, Sweden
+const DEFAULT_LOCATION: LocationData = { lat: 59.3293, lng: 18.0686 };
+
+// Helper function to get error message based on error code
+const getGeolocationErrorMessage = (
+  error: GeolocationPositionError
+): string => {
+  switch (error.code) {
+    case 1:
+      return "Permission denied. Please enable location access in your browser settings.";
+    case 2:
+      return "Location unavailable. Your device couldn't determine your position.";
+    case 3:
+      return "Location request timed out. Please try again.";
+    default:
+      return `Geolocation error: ${error.message || "Unknown error"}`;
+  }
+};
+
 // Get user's current geolocation
 export function getUserLocation(): Promise<LocationData> {
-  return new Promise((resolve, reject) => {
+  // Return cached location if available
+  if (cachedLocation) {
+    return Promise.resolve(cachedLocation);
+  }
+
+  // Return existing promise if we're already fetching
+  if (locationPromise) {
+    return locationPromise;
+  }
+
+  locationPromise = new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error("Geolocation is not supported by your browser"));
+      console.warn("Geolocation is not supported by this browser");
+      cachedLocation = DEFAULT_LOCATION;
+      resolve(DEFAULT_LOCATION);
       return;
     }
 
+    // Use a timeout to avoid long waits for geolocation
+    const timeoutId = setTimeout(() => {
+      // Default to a fallback location if geolocation takes too long
+      console.warn("Geolocation timed out, using fallback location");
+      cachedLocation = DEFAULT_LOCATION;
+      resolve(DEFAULT_LOCATION);
+      locationPromise = null;
+    }, 5000); // 5 second timeout
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        resolve({
+        clearTimeout(timeoutId);
+        const location = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        });
+        };
+        cachedLocation = location;
+        resolve(location);
+        locationPromise = null;
       },
       (error) => {
-        reject(error);
+        clearTimeout(timeoutId);
+        // Log detailed error message
+        const errorMessage = getGeolocationErrorMessage(error);
+        console.warn(errorMessage);
+
+        // Fall back to a default location on error
+        cachedLocation = DEFAULT_LOCATION;
+        resolve(DEFAULT_LOCATION); // Resolve with fallback rather than rejecting
+        locationPromise = null;
+      },
+      {
+        enableHighAccuracy: false, // No need for high accuracy for weather data
+        timeout: 8000, // 8-second timeout (increased from 4s)
+        maximumAge: 1000 * 60 * 60, // Accept positions up to an hour old
       }
     );
   });
+
+  return locationPromise;
 }
