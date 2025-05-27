@@ -18,7 +18,17 @@ const getUVSeverity = (uvIndex: number): { level: string; color: string } => {
   return { level: "Extreme", color: "bg-purple-600" };
 };
 
+const test = () => {
+  console.log("Testing API call...");
+  fetch(
+    "https://corsproxy.io/?https://currentuvindex.com/api/v1/uvi?latitude=40.6943&longitude=-73.9249"
+  )
+    .then((res) => res.json())
+    .then((data) => console.log(data));
+};
+
 export default function MeteomaticsUVDisplay() {
+  void test();
   const [uvData, setUvData] = useState<MeteomaticsUVData | null>(null);
   const [location, setLocation] = useState<LocationData | null>(null);
   const [loading, setLoading] = useState(true);
