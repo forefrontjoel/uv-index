@@ -1,6 +1,7 @@
 "use client";
 
 import MeteomaticsUVDisplay from "./components/MeteomaticsUVDisplay";
+import UVIndexServiceTest from "./components/UVIndexServiceTest";
 
 export default function Home() {
   return (
@@ -12,14 +13,21 @@ export default function Home() {
         </p>
       </header>
 
-      <main className="row-start-2 w-full">
-        <MeteomaticsUVDisplay />
+      <main className="row-start-2 w-full grid gap-8">
+        <div className="mb-8">
+          <h2 className="text-center text-lg font-semibold mb-4">Old Implementation (Meteomatics)</h2>
+          <MeteomaticsUVDisplay />
+        </div>
+        
+        <div>
+          <h2 className="text-center text-lg font-semibold mb-4">New Implementation (Free API)</h2>
+          <UVIndexServiceTest />
+        </div>
       </main>
 
       <footer className="row-start-3 text-center text-sm text-gray-500 mt-8">
         <p>
-          © {new Date().getFullYear()} UV Index Tracker. Powered by Meteomatics
-          Professional Weather Data.
+          © {new Date().getFullYear()} UV Index Tracker
         </p>
       </footer>
     </div>
